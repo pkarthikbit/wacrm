@@ -99,27 +99,27 @@ Create a site configuration:
 sudo nano /etc/nginx/sites-available/wacrm
 ```
 
-Paste this configuration. Replace `129.159.232.184` if the server uses a
-different public IP or domain name:
+Paste this configuration. The domain must already resolve to the VM's public
+IP address before continuing:
 
 ```nginx
 server {
-      listen 80;
-      listen [::]:80;
-      server_name 129.159.232.184;
+   listen 80;
+   listen [::]:80;
+   server_name crm.inveh.in;
 
-      client_max_body_size 25M;
+   client_max_body_size 25M;
 
-      location / {
-            proxy_pass http://127.0.0.1:3000;
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-      }
+   location / {
+      proxy_pass http://127.0.0.1:3000;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+   }
 }
 ```
 
@@ -134,21 +134,48 @@ sudo systemctl enable --now nginx
 sudo systemctl reload nginx
 ```
 
-Allow public HTTP traffic on the VM and in the cloud firewall:
+Before enabling HTTPS, verify that HTTP works at
+`http://crm.inveh.in`. If it does not load, check the cloud firewall, UFW,
+Nginx status, and the container logs before continuing.
+
+## Enable HTTPS
+
+Install Certbot and its Nginx plugin:
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+```
+
+Request and install a certificate for the domain:
+
+```bash
+sudo certbot --nginx -d crm.inveh.in
+```
+
+When prompted, choose the option to redirect HTTP traffic to HTTPS. Certbot
+will update the Nginx configuration and restart TLS automatically. Verify
+renewal without changing the live certificate:
+
+```bash
+sudo certbot renew --dry-run
+```
+
+Allow public HTTP and HTTPS traffic on the VM:
 
 ```bash
 sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 sudo ufw status
 ```
 
-Add an inbound TCP port 80 rule in the cloud provider's network security
-rules. For a temporary test, allow `0.0.0.0/0`; restrict the source range for
-production use.
+Add inbound TCP port 80 and 443 rules in the cloud provider's network
+security rules. For a temporary test, allow `0.0.0.0/0`; restrict the source
+range for production use.
 
 Open the app at:
 
 ```text
-http://129.159.232.184
+https://crm.inveh.in
 ```
 
 Useful troubleshooting commands:
@@ -158,7 +185,8 @@ sudo systemctl status nginx
 sudo journalctl -u nginx -n 100 --no-pager
 sudo docker logs --tail 100 wacrm
 curl http://127.0.0.1:3000
-curl -H 'Host: 129.159.232.184' http://127.0.0.1
+curl -H 'Host: crm.inveh.in' http://127.0.0.1
+curl -I https://crm.inveh.in
 ```
 
 ## CPU Architecture
