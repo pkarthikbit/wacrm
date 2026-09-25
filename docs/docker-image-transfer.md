@@ -127,16 +127,39 @@ Enable the site, disable the default site, test the configuration, and reload
 Nginx:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/wacrm /etc/nginx/sites-enabled/wacrm
+sudo ln -sfn /etc/nginx/sites-available/wacrm /etc/nginx/sites-enabled/wacrm
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl enable --now nginx
 sudo systemctl reload nginx
 ```
 
-Before enabling HTTPS, verify that HTTP works at
-`http://crm.inveh.in`. If it does not load, check the cloud firewall, UFW,
-Nginx status, and the container logs before continuing.
+Allow public HTTP traffic before testing the domain:
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw status
+```
+
+Also add an inbound TCP port 80 rule in the cloud provider's network
+security rules. For a temporary test, allow `0.0.0.0/0`; restrict the source
+range for production use.
+
+Verify each layer on the VM:
+
+```bash
+sudo docker ps
+curl -i http://127.0.0.1:3000
+sudo nginx -t
+sudo systemctl status nginx --no-pager
+curl -i -H 'Host: crm.inveh.in' http://127.0.0.1
+```
+
+The first `curl` must return the WACRM page. The second must return the same
+page through Nginx. If the first fails, restart the container and inspect its
+logs. If the first succeeds but the second fails, fix Nginx. If both local
+checks succeed but `http://crm.inveh.in` fails from your computer, fix the
+cloud firewall or UFW rules.
 
 ## Enable HTTPS
 
@@ -163,14 +186,12 @@ sudo certbot renew --dry-run
 Allow public HTTP and HTTPS traffic on the VM:
 
 ```bash
-sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw status
 ```
 
-Add inbound TCP port 80 and 443 rules in the cloud provider's network
-security rules. For a temporary test, allow `0.0.0.0/0`; restrict the source
-range for production use.
+Add an inbound TCP port 443 rule in the cloud provider's network security
+rules. Port 80 should already be allowed from the HTTP setup above.
 
 Open the app at:
 
