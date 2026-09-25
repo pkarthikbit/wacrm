@@ -76,6 +76,40 @@ sudo docker run -d \
   wacrm:0.8.0
 ```
 
+If Docker reports `failed to bind host port 0.0.0.0:80: address already in
+use`, inspect what owns port 80:
+
+```bash
+sudo ss -ltnp 'sport = :80'
+sudo docker ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}'
+```
+
+If an old WACRM container owns the port, remove it and retry the command:
+
+```bash
+sudo docker rm -f wacrm
+```
+
+If `nginx`, `apache2`, or another web server owns the port, either stop it
+only if it is no longer needed, or keep it as a reverse proxy and configure it
+to forward requests to `http://127.0.0.1:3000`. Do not stop an existing web
+server until you know what other sites or services use it.
+
+For a quick test without touching the service on port 80, publish port 8080:
+
+```bash
+sudo docker run -d \
+  --name wacrm \
+  --restart unless-stopped \
+  --env-file .env.local \
+  -e PORT=3000 \
+  -p 8080:3000 \
+  wacrm:0.8.0
+```
+
+Then open `http://129.159.232.184:8080` and allow TCP port 8080 in the cloud
+firewall and UFW if required.
+
 Then allow inbound TCP port 80 in both places:
 
 1. In the cloud provider's network security rules for the VM, add an ingress
