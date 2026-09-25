@@ -14,6 +14,20 @@ docker tag "$(docker compose --env-file .env.local images -q app)" wacrm:0.8.0
 docker save wacrm:0.8.0 | gzip > wacrm-0.8.0.tar.gz
 ```
 
+If Docker requires `sudo` on the build computer, use it consistently for
+every Docker command, including the command inside `$(...)`:
+
+```bash
+sudo docker compose --env-file .env.local build
+sudo docker tag "$(sudo docker compose --env-file .env.local images -q app)" wacrm:0.8.0
+sudo docker save wacrm:0.8.0 | gzip > wacrm-0.8.0.tar.gz
+```
+
+If `docker compose ... images -q app` prints nothing, build the image first.
+The `invalid reference format` error means that the image ID passed to
+`docker tag` was empty; it is usually a Docker socket permission failure from
+the command substitution.
+
 The `NEXT_PUBLIC_*` Supabase values are embedded into the client bundle during
 this build. Make sure `.env.local` contains the correct values before building.
 
@@ -45,7 +59,7 @@ docker run -d \
 ```
 
 Open `http://localhost:3000` on the destination computer. To publish a
- different host port, change the left side of the mapping, for example
+different host port, change the left side of the mapping, for example
 `-p 8080:3000`.
 
 ## CPU Architecture
