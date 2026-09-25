@@ -38,93 +38,55 @@ scp wacrm-0.8.0.tar.gz .env.local user@OTHER_PC:/path/to/wacrm/
 
 Keep `.env.local` private. It contains server-side secrets required at runtime.
 
-## Load and Run
+## Extract, Load, and Run
 
-On the destination computer:
+Run these commands on the destination computer. This workflow does not use a
+reverse proxy and does not publish a Docker port with `-p`:
 
-```bash
-docker load < wacrm-0.8.0.tar.gz
+1. Extract the archive if it was transferred as a gzip-compressed tar file:
 
-docker run -d \
-  --name wacrm \
-  --restart unless-stopped \
-  --env-file .env.local \
-  -e PORT=3000 \
-  -p 3000:3000 \
-  wacrm:0.8.0
-```
+   ```bash
+   gunzip wacrm-0.8.0.tar.gz
+   ```
 
-Open `http://localhost:3000` on the destination computer. To publish a
-different host port, change the left side of the mapping, for example
-`-p 8080:3000`.
+   This creates `wacrm-0.8.0.tar`.
 
-## Open the App at the Public IP
+2. Load the image into Docker:
 
-To load the app as `http://129.159.232.184` without adding a port, publish
-host port 80 to the container's port 3000. On the destination computer, stop
-and remove the existing container first, then run:
+   ```bash
+   sudo docker load --input wacrm-0.8.0.tar
+   ```
 
-```bash
-sudo docker rm -f wacrm 2>/dev/null || true
+3. Remove an older container with the same name, if one exists:
 
-sudo docker run -d \
-  --name wacrm \
-  --restart unless-stopped \
-  --env-file .env.local \
-  -e PORT=3000 \
-  -p 80:3000 \
-  wacrm:0.8.0
-```
+   ```bash
+   sudo docker rm -f wacrm 2>/dev/null || true
+   ```
 
-If Docker reports `failed to bind host port 0.0.0.0:80: address already in
-use`, inspect what owns port 80:
+4. Run the image without a Docker port mapping:
 
-```bash
-sudo ss -ltnp 'sport = :80'
-sudo docker ps --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}'
-```
+   ```bash
+   sudo docker run -d \
+     --name wacrm \
+     --restart unless-stopped \
+     --env-file .env.local \
+     -e PORT=3000 \
+     wacrm:0.8.0
+   ```
 
-If an old WACRM container owns the port, remove it and retry the command:
+This starts the container, but it is not reachable from another computer or
+from the VM public IP because no host port is published. Check its status and
+logs with:
 
 ```bash
-sudo docker rm -f wacrm
+sudo docker ps
+sudo docker logs --tail 100 wacrm
 ```
 
-If `nginx`, `apache2`, or another web server owns the port, either stop it
-only if it is no longer needed, or keep it as a reverse proxy and configure it
-to forward requests to `http://127.0.0.1:3000`. Do not stop an existing web
-server until you know what other sites or services use it.
-
-For a quick test without touching the service on port 80, publish port 8080:
-
-```bash
-sudo docker run -d \
-  --name wacrm \
-  --restart unless-stopped \
-  --env-file .env.local \
-  -e PORT=3000 \
-  -p 8080:3000 \
-  wacrm:0.8.0
-```
-
-Then open `http://129.159.232.184:8080` and allow TCP port 8080 in the cloud
-firewall and UFW if required.
-
-Then allow inbound TCP port 80 in both places:
-
-1. In the cloud provider's network security rules for the VM, add an ingress
-  rule for TCP port 80 from the clients that should access the app. For a
-  temporary test, use `0.0.0.0/0`; restrict this to trusted IP ranges for a
-  production deployment.
-2. On the VM, if UFW is enabled, run:
-
-  ```bash
-  sudo ufw allow 80/tcp
-  sudo ufw status
-  ```
-
-After that, open `http://129.159.232.184` in the browser. Port 80 requires
-root-level Docker access, which is why the command uses `sudo`.
+To access the app from a browser without a reverse proxy, Docker must publish
+a host port. For the public IP on standard HTTP port 80, use `-p 80:3000` in
+the `docker run` command and allow TCP port 80 in the cloud firewall and UFW.
+Then open `http://129.159.232.184`.
 
 ## CPU Architecture
 
