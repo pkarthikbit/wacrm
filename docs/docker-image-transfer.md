@@ -38,10 +38,9 @@ scp wacrm-0.8.0.tar.gz .env.local user@OTHER_PC:/path/to/wacrm/
 
 Keep `.env.local` private. It contains server-side secrets required at runtime.
 
-## Extract, Load, and Run
+## Extract and Load the Image
 
-Run these commands on the destination computer. This workflow does not use a
-reverse proxy and does not publish a Docker port with `-p`:
+Run these commands on the destination computer:
 
 1. Extract the archive if it was transferred as a gzip-compressed tar file:
 
@@ -63,30 +62,104 @@ reverse proxy and does not publish a Docker port with `-p`:
    sudo docker rm -f wacrm 2>/dev/null || true
    ```
 
-4. Run the image without a Docker port mapping:
+## Run the Container for Nginx
 
-   ```bash
-   sudo docker run -d \
-     --name wacrm \
-     --restart unless-stopped \
-     --env-file .env.local \
-     -e PORT=3000 \
-     wacrm:0.8.0
-   ```
+Run WACRM on localhost only. Docker does not publish port 3000 publicly;
+Nginx will receive public HTTP requests and forward them to this container.
 
-This starts the container, but it is not reachable from another computer or
-from the VM public IP because no host port is published. Check its status and
-logs with:
+```bash
+sudo docker run -d \
+   --name wacrm \
+   --restart unless-stopped \
+   --env-file .env.local \
+   -e PORT=3000 \
+   -p 127.0.0.1:3000:3000 \
+   wacrm:0.8.0
+```
+
+Check that the container is running:
 
 ```bash
 sudo docker ps
 sudo docker logs --tail 100 wacrm
 ```
 
-To access the app from a browser without a reverse proxy, Docker must publish
-a host port. For the public IP on standard HTTP port 80, use `-p 80:3000` in
-the `docker run` command and allow TCP port 80 in the cloud firewall and UFW.
-Then open `http://129.159.232.184`.
+## Configure Nginx
+
+Install Nginx on the destination VM:
+
+```bash
+sudo apt update
+sudo apt install -y nginx
+```
+
+Create a site configuration:
+
+```bash
+sudo nano /etc/nginx/sites-available/wacrm
+```
+
+Paste this configuration. Replace `129.159.232.184` if the server uses a
+different public IP or domain name:
+
+```nginx
+server {
+      listen 80;
+      listen [::]:80;
+      server_name 129.159.232.184;
+
+      client_max_body_size 25M;
+
+      location / {
+            proxy_pass http://127.0.0.1:3000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+      }
+}
+```
+
+Enable the site, disable the default site, test the configuration, and reload
+Nginx:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/wacrm /etc/nginx/sites-enabled/wacrm
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl enable --now nginx
+sudo systemctl reload nginx
+```
+
+Allow public HTTP traffic on the VM and in the cloud firewall:
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw status
+```
+
+Add an inbound TCP port 80 rule in the cloud provider's network security
+rules. For a temporary test, allow `0.0.0.0/0`; restrict the source range for
+production use.
+
+Open the app at:
+
+```text
+http://129.159.232.184
+```
+
+Useful troubleshooting commands:
+
+```bash
+sudo systemctl status nginx
+sudo journalctl -u nginx -n 100 --no-pager
+sudo docker logs --tail 100 wacrm
+curl http://127.0.0.1:3000
+curl -H 'Host: 129.159.232.184' http://127.0.0.1
+```
 
 ## CPU Architecture
 
