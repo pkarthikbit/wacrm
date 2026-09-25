@@ -247,3 +247,51 @@ docker save wacrm:0.8.0 | gzip > wacrm-0.8.0.tar.gz
 
 The destination computer still needs Docker installed, but it does not need
 Node.js, npm, or the source repository.
+
+## Root Cause and Recovery
+
+If the app works locally but the public URL cannot connect, inspect the VM's
+network path in this order:
+
+```bash
+sudo ss -ltnp | grep ':80'
+sudo iptables -L INPUT -n -v --line-numbers
+sudo ufw status verbose
+```
+
+In this deployment, Docker and Nginx were working correctly. The failure was
+caused by an existing `iptables` `REJECT` rule in the `INPUT` chain. It ran
+before the UFW chains, so inbound TCP connections to port 80 were rejected
+even though UFW showed port 80 as allowed. `tcpdump` showed the incoming SYN
+packet arriving at the VM, but the VM sent no SYN-ACK response.
+
+Allow HTTP and HTTPS before the reject rule:
+
+```bash
+sudo iptables -I INPUT 5 -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 5 -p tcp --dport 443 -j ACCEPT
+```
+
+Verify the rules and persist them across reboots:
+
+```bash
+sudo iptables -L INPUT -n -v --line-numbers
+sudo apt install -y iptables-persistent
+sudo netfilter-persistent save
+```
+
+The same firewall problem prevented Let's Encrypt from retrieving its HTTP
+challenge, so Certbot failed with `Error getting validation data`. Certbot
+must be run only after external HTTP access works:
+
+```bash
+curl -4 -I http://crm.inveh.in/
+sudo certbot --nginx -d crm.inveh.in
+```
+
+After Certbot configures Nginx, confirm HTTPS:
+
+```bash
+sudo ss -ltnp | grep ':443'
+curl -4 -I https://crm.inveh.in/
+```
