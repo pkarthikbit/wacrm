@@ -163,6 +163,10 @@ cloud firewall or UFW rules.
 
 ## Enable HTTPS
 
+Do not test `https://crm.inveh.in` yet. The HTTP-only Nginx configuration
+listens on port 80; port 443 starts listening only after Certbot installs the
+certificate and HTTPS configuration.
+
 Install Certbot and its Nginx plugin:
 
 ```bash
@@ -186,12 +190,26 @@ sudo certbot renew --dry-run
 Allow public HTTP and HTTPS traffic on the VM:
 
 ```bash
+sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw status
 ```
 
 Add an inbound TCP port 443 rule in the cloud provider's network security
 rules. Port 80 should already be allowed from the HTTP setup above.
+
+Confirm that Nginx is listening on HTTPS before testing from a browser:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+sudo ss -ltnp | grep ':443'
+curl -I https://crm.inveh.in
+```
+
+If `ss` shows no listener on `:443`, Certbot did not install the HTTPS
+configuration. Run `sudo certbot --nginx -d crm.inveh.in` again and inspect
+`sudo journalctl -u nginx -n 100 --no-pager`.
 
 Open the app at:
 
