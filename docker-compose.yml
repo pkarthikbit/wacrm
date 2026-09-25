@@ -2,6 +2,7 @@ name: wacrm
 
 services:
   app:
+    image: wacrm:0.8.0
     build:
       context: .
       # NEXT_PUBLIC_* vars are inlined at build time — forward them

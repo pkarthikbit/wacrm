@@ -9,24 +9,20 @@ Run these commands on the computer where the image is built:
 
 ```bash
 docker compose --env-file .env.local build
-
-docker tag "$(docker compose --env-file .env.local images -q app)" wacrm:0.8.0
 docker save wacrm:0.8.0 | gzip > wacrm-0.8.0.tar.gz
 ```
 
-If Docker requires `sudo` on the build computer, use it consistently for
-every Docker command, including the command inside `$(...)`:
+If Docker requires `sudo` on the build computer:
 
 ```bash
 sudo docker compose --env-file .env.local build
-sudo docker tag "$(sudo docker compose --env-file .env.local images -q app)" wacrm:0.8.0
 sudo docker save wacrm:0.8.0 | gzip > wacrm-0.8.0.tar.gz
 ```
 
-If `docker compose ... images -q app` prints nothing, build the image first.
-The `invalid reference format` error means that the image ID passed to
-`docker tag` was empty; it is usually a Docker socket permission failure from
-the command substitution.
+The Compose service is configured with the stable image name
+`wacrm:0.8.0`, so no separate `docker tag` command is needed. If the image
+version changes, update the `image:` value in `docker-compose.yml` and the
+matching tag in this guide.
 
 The `NEXT_PUBLIC_*` Supabase values are embedded into the client bundle during
 this build. Make sure `.env.local` contains the correct values before building.
